@@ -88,6 +88,44 @@ function isAuthorized(req: Request): boolean {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
+/** Validate that a string represents a valid integer ID (digits only). Returns the string as-is for BIGINT safety. */
+function validateId(raw: string): string | null {
+  return /^\d+$/.test(raw) ? raw : null;
+}
+
+/**
+ * Extract thought ID from upsert_thought RPC response, which may return:
+ *   - A scalar number (e.g. 42)
+ *   - { thought_id: 42, action: "inserted", content_fingerprint: "..." }
+ *   - { id: 42 }
+ *   - { id: 42, action: "inserted", content_fingerprint: "..." }
+ * Returns the ID as a string for BIGINT safety, or null if extraction fails.
+ */
+function extractThoughtId(data: unknown): { id: string; action: string; fingerprint: string | null } | null {
+  if (data == null) return null;
+
+  // Scalar number or string
+  if (typeof data === "number" || typeof data === "string") {
+    const s = String(data);
+    return /^\d+$/.test(s) ? { id: s, action: "inserted", fingerprint: null } : null;
+  }
+
+  if (!isRecord(data)) return null;
+  const rec = data as Record<string, unknown>;
+
+  // Try thought_id first, then id
+  const rawId = rec.thought_id ?? rec.id;
+  if (rawId == null) return null;
+  const idStr = String(rawId);
+  if (!/^\d+$/.test(idStr)) return null;
+
+  return {
+    id: idStr,
+    action: typeof rec.action === "string" ? rec.action : "inserted",
+    fingerprint: typeof rec.content_fingerprint === "string" ? rec.content_fingerprint : null,
+  };
+}
+
 function sanitizeType(value: string): string {
   const normalized = value.trim().toLowerCase();
   return ALLOWED_TYPES.has(normalized) ? normalized : "idea";
@@ -145,7 +183,8 @@ Deno.serve(async (req) => {
     // /thought/:id routes
     const thoughtMatch = path.match(/^\/thought\/(\d+)$/);
     if (thoughtMatch) {
-      const id = Number(thoughtMatch[1]);
+      const id = validateId(thoughtMatch[1]);
+      if (!id) return json({ error: "Invalid thought ID" }, 400);
       if (req.method === "GET") return await handleGetThought(id, url.searchParams.get("exclude_restricted") !== "false");
       if (req.method === "PUT") return await handleUpdateThought(id, req);
       if (req.method === "DELETE") return await handleDeleteThought(id);
@@ -153,12 +192,16 @@ Deno.serve(async (req) => {
 
     const connectionsMatch = path.match(/^\/thought\/(\d+)\/connections$/);
     if (connectionsMatch && req.method === "GET") {
-      return await handleGetConnections(Number(connectionsMatch[1]), url);
+      const connId = validateId(connectionsMatch[1]);
+      if (!connId) return json({ error: "Invalid thought ID" }, 400);
+      return await handleGetConnections(connId, url);
     }
 
     const enrichMatch = path.match(/^\/thought\/(\d+)\/enrich$/);
     if (enrichMatch && req.method === "PATCH") {
-      return await handleEnrichThought(Number(enrichMatch[1]), url);
+      const enrichId = validateId(enrichMatch[1]);
+      if (!enrichId) return json({ error: "Invalid thought ID" }, 400);
+      return await handleEnrichThought(enrichId, url);
     }
 
     // Smart ingest proxy routes
@@ -166,10 +209,18 @@ Deno.serve(async (req) => {
     if (path === "/ingestion-jobs" && req.method === "GET") return await handleListJobs(url);
 
     const executeMatch = path.match(/^\/ingestion-jobs\/(\d+)\/execute$/);
-    if (executeMatch && req.method === "POST") return await handleExecuteJob(Number(executeMatch[1]));
+    if (executeMatch && req.method === "POST") {
+      const execJobId = validateId(executeMatch[1]);
+      if (!execJobId) return json({ error: "Invalid job ID" }, 400);
+      return await handleExecuteJob(execJobId);
+    }
 
     const jobDetailMatch = path.match(/^\/ingestion-jobs\/(\d+)$/);
-    if (jobDetailMatch && req.method === "GET") return await handleGetJob(Number(jobDetailMatch[1]));
+    if (jobDetailMatch && req.method === "GET") {
+      const detailJobId = validateId(jobDetailMatch[1]);
+      if (!detailJobId) return json({ error: "Invalid job ID" }, 400);
+      return await handleGetJob(detailJobId);
+    }
 
     // Duplicates
     if (path === "/duplicates" && req.method === "GET") return await handleFindDuplicates(url);
@@ -178,7 +229,11 @@ Deno.serve(async (req) => {
     // Entity routes (knowledge graph)
     if (path === "/entities" && req.method === "GET") return await handleEntities(url);
     const entityMatch = path.match(/^\/entities\/(\d+)$/);
-    if (entityMatch && req.method === "GET") return await handleEntityDetail(Number(entityMatch[1]));
+    if (entityMatch && req.method === "GET") {
+      const entId = validateId(entityMatch[1]);
+      if (!entId) return json({ error: "Invalid entity ID" }, 400);
+      return await handleEntityDetail(entId);
+    }
 
     return json({
       error: "Not found",
@@ -292,13 +347,13 @@ async function handleCapture(req: Request): Promise<Response> {
   });
 
   if (error) throw new Error(`capture failed: ${error.message}`);
-  const result = data as { thought_id: number; action: string; content_fingerprint: string } | null;
-  if (!result?.thought_id) throw new Error("upsert_thought returned no result");
+  const result = extractThoughtId(data);
+  if (!result) throw new Error("upsert_thought returned no result");
 
   return json({
-    thought_id: result.thought_id, action: result.action, type: prepared.type,
-    sensitivity_tier: prepared.sensitivity_tier, content_fingerprint: result.content_fingerprint,
-    message: `${result.action === "inserted" ? "Captured new" : "Updated"} thought #${result.thought_id} as ${prepared.type}`,
+    thought_id: result.id, action: result.action, type: prepared.type,
+    sensitivity_tier: prepared.sensitivity_tier, content_fingerprint: result.fingerprint,
+    message: `${result.action === "inserted" ? "Captured new" : "Updated"} thought #${result.id} as ${prepared.type}`,
   });
 }
 
@@ -327,7 +382,7 @@ async function handleRecent(url: URL): Promise<Response> {
 
 // ── Get / Update / Delete Thought ───────────────────────────────────────────
 
-async function handleGetThought(id: number, excludeRestricted: boolean): Promise<Response> {
+async function handleGetThought(id: string, excludeRestricted: boolean): Promise<Response> {
   const { data, error } = await supabase.from("thoughts")
     .select("id, content, type, source_type, importance, quality_score, sensitivity_tier, metadata, created_at, updated_at")
     .eq("id", id).single();
@@ -336,7 +391,7 @@ async function handleGetThought(id: number, excludeRestricted: boolean): Promise
   return json(data);
 }
 
-async function handleUpdateThought(id: number, req: Request): Promise<Response> {
+async function handleUpdateThought(id: string, req: Request): Promise<Response> {
   const body = await req.json() as Record<string, unknown>;
   const content = String(body.content ?? "").trim();
   if (!content) return json({ error: "content is required" }, 400);
@@ -360,7 +415,7 @@ async function handleUpdateThought(id: number, req: Request): Promise<Response> 
   return json({ id, action: "updated", message: `Thought #${id} updated` });
 }
 
-async function handleDeleteThought(id: number): Promise<Response> {
+async function handleDeleteThought(id: string): Promise<Response> {
   const { data: existing, error: fetchErr } = await supabase.from("thoughts").select("id").eq("id", id).single();
   if (fetchErr || !existing) return json({ error: `Thought #${id} not found` }, 404);
   const { error: deleteErr } = await supabase.from("thoughts").delete().eq("id", id);
@@ -463,7 +518,7 @@ async function handleCount(url: URL): Promise<Response> {
 
 // ── Connections ──────────────────────────────────────────────────────────────
 
-async function handleGetConnections(thoughtId: number, url: URL): Promise<Response> {
+async function handleGetConnections(thoughtId: string, url: URL): Promise<Response> {
   const excludeRestricted = url.searchParams.get("exclude_restricted") !== "false";
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 20, 1), 50);
 
@@ -489,7 +544,7 @@ async function handleGetConnections(thoughtId: number, url: URL): Promise<Respon
 
 const VALID_FILLS = new Set(["embedding", "classification", "sensitivity", "all"]);
 
-async function handleEnrichThought(thoughtId: number, url: URL): Promise<Response> {
+async function handleEnrichThought(thoughtId: string, url: URL): Promise<Response> {
   const fill = url.searchParams.get("fill") || "all";
   const excludeRestricted = url.searchParams.get("exclude_restricted") !== "false";
 
@@ -583,7 +638,7 @@ async function handleIngest(req: Request): Promise<Response> {
   return json(await response.json(), response.status);
 }
 
-async function handleExecuteJob(jobId: number): Promise<Response> {
+async function handleExecuteJob(jobId: string): Promise<Response> {
   const response = await fetch(`${SUPABASE_URL}/functions/v1/smart-ingest/execute`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-brain-key": MCP_ACCESS_KEY },
@@ -604,7 +659,7 @@ async function handleListJobs(url: URL): Promise<Response> {
   return json({ jobs: data ?? [], count: (data ?? []).length });
 }
 
-async function handleGetJob(jobId: number): Promise<Response> {
+async function handleGetJob(jobId: string): Promise<Response> {
   const [jobRes, itemsRes] = await Promise.all([
     supabase.from("ingestion_jobs").select("*").eq("id", jobId).single(),
     supabase.from("ingestion_items").select("*").eq("job_id", jobId).order("id"),
@@ -627,11 +682,11 @@ async function handleFindDuplicates(url: URL): Promise<Response> {
 
 async function handleDuplicateResolve(req: Request): Promise<Response> {
   const body = await req.json() as Record<string, unknown>;
-  const thoughtIdA = Number(body.thought_id_a);
-  const thoughtIdB = Number(body.thought_id_b);
+  const thoughtIdA = body.thought_id_a != null ? String(body.thought_id_a) : "";
+  const thoughtIdB = body.thought_id_b != null ? String(body.thought_id_b) : "";
   const action = String(body.action ?? "");
 
-  if (!thoughtIdA || !thoughtIdB) return json({ error: "Both thought_id_a and thought_id_b are required" }, 400);
+  if (!validateId(thoughtIdA) || !validateId(thoughtIdB)) return json({ error: "Both thought_id_a and thought_id_b are required and must be valid integer IDs" }, 400);
   if (!["keep_a", "keep_b", "keep_both"].includes(action)) return json({ error: "action must be keep_a, keep_b, or keep_both" }, 400);
   if (action === "keep_both") return json({ action, survivor_id: null, loser_id: null, reattached: { thought_entities: 0 } });
 
@@ -714,7 +769,7 @@ async function handleEntities(url: URL): Promise<Response> {
   return json({ results, total: count ?? 0, limit, offset });
 }
 
-async function handleEntityDetail(entityId: number): Promise<Response> {
+async function handleEntityDetail(entityId: string): Promise<Response> {
   const { data: entity, error: entityError } = await supabase.from("entities").select("*").eq("id", entityId).maybeSingle();
   if (entityError) throw new Error(`entity fetch failed: ${entityError.message}`);
   if (!entity) return json({ error: "Entity not found" }, 404);
