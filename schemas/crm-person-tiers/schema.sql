@@ -146,8 +146,11 @@ BEGIN
     FROM public.crm_persons p
    WHERE (v_search IS NULL OR p.canonical_name ILIKE '%' || v_search || '%');
 
+  -- Compute mention_count and effective_tier BEFORE pagination so global
+  -- tier-priority ordering is preserved across pages. Without this, page 1
+  -- can miss high-mention "connected" people that sort later by last_seen.
   RETURN QUERY
-  WITH person_page AS (
+  WITH filtered AS (
     SELECT
       p.id               AS p_id,
       p.canonical_name   AS p_canonical_name,
@@ -158,36 +161,34 @@ BEGIN
       p.relationship_tier AS p_relationship_tier
     FROM public.crm_persons p
     WHERE (v_search IS NULL OR p.canonical_name ILIKE '%' || v_search || '%')
-    ORDER BY p.last_seen_at DESC NULLS LAST, p.canonical_name ASC
-    LIMIT v_limit OFFSET v_offset
   ),
   mention_counts AS (
     SELECT
       m.person_id AS mc_person_id,
       count(*)::bigint AS mc_count
     FROM public.crm_person_mentions m
-    WHERE m.person_id IN (SELECT pp.p_id FROM person_page pp)
+    WHERE m.person_id IN (SELECT f.p_id FROM filtered f)
     GROUP BY m.person_id
   ),
   rows_out AS (
     SELECT
-      pp.p_id,
-      pp.p_canonical_name,
-      pp.p_aliases,
-      pp.p_metadata,
-      pp.p_first_seen_at,
-      pp.p_last_seen_at,
+      f.p_id,
+      f.p_canonical_name,
+      f.p_aliases,
+      f.p_metadata,
+      f.p_first_seen_at,
+      f.p_last_seen_at,
       COALESCE(mc.mc_count, 0)::bigint AS r_mention_count,
-      pp.p_relationship_tier::text AS r_relationship_tier,
+      f.p_relationship_tier::text AS r_relationship_tier,
       (CASE
-        WHEN pp.p_relationship_tier = 'connected' THEN 'connected'
+        WHEN f.p_relationship_tier = 'connected' THEN 'connected'
         WHEN COALESCE(mc.mc_count, 0) >= v_promote_min
-             AND pp.p_last_seen_at IS NOT NULL
-             AND pp.p_last_seen_at >= now() - v_promote_within THEN 'connected'
-        ELSE pp.p_relationship_tier
+             AND f.p_last_seen_at IS NOT NULL
+             AND f.p_last_seen_at >= now() - v_promote_within THEN 'connected'
+        ELSE f.p_relationship_tier
       END)::text AS r_effective_tier
-    FROM person_page pp
-    LEFT JOIN mention_counts mc ON mc.mc_person_id = pp.p_id
+    FROM filtered f
+    LEFT JOIN mention_counts mc ON mc.mc_person_id = f.p_id
   )
   SELECT
     ro.p_id,
@@ -210,7 +211,8 @@ BEGIN
     END ASC,
     ro.p_last_seen_at DESC NULLS LAST,
     ro.r_mention_count DESC,
-    ro.p_canonical_name ASC;
+    ro.p_canonical_name ASC
+  LIMIT v_limit OFFSET v_offset;
 END;
 $$;
 
