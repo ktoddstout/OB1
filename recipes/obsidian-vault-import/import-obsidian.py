@@ -372,16 +372,24 @@ def insert_thought(content: str, embedding: list[float] | None, metadata: dict,
     If fingerprint is provided and the thoughts table has a unique index on
     content_fingerprint, duplicates are rejected with 409 Conflict.
     """
+    # Wrap metadata in the format Open Brain expects
+    full_metadata = {
+        "type": "observation",
+        "people": [],
+        "source": metadata.get("source", "obsidian"),
+        "topics": metadata.get("tags", [])[:5] if metadata.get("tags") else [],
+        "action_items": [],
+        "dates_mentioned": [metadata.get("date", "")] if metadata.get("date") else [],
+        **{k: v for k, v in metadata.items()},
+    }
     payload = {
         "content": content,
-        "metadata": metadata,
+        "metadata": full_metadata,
     }
     if embedding:
         payload["embedding"] = embedding
     if created_at:
         payload["created_at"] = created_at
-    if fingerprint:
-        payload["content_fingerprint"] = fingerprint
 
     headers = {
         "apikey": supabase_key,
@@ -389,10 +397,6 @@ def insert_thought(content: str, embedding: list[float] | None, metadata: dict,
         "Content-Type": "application/json",
         "Prefer": "return=minimal",
     }
-    # If fingerprint is set and the table has a unique index on content_fingerprint,
-    # this upsert skips duplicates. Without the index, it behaves as a normal insert.
-    if fingerprint:
-        headers["Prefer"] = "return=minimal,resolution=merge-duplicates"
 
     for attempt in range(MAX_RETRIES):
         try:

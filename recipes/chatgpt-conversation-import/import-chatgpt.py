@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import sys
+sys.setrecursionlimit(10000)
 """
 Open Brain — ChatGPT Export Importer (v2)
 
