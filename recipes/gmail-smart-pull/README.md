@@ -1,5 +1,9 @@
 # Gmail Smart Pull
 
+![Community Contribution](https://img.shields.io/badge/OB1_COMMUNITY-Approved_Contribution-2ea44f?style=for-the-badge&logo=github)
+
+**Created by [@alanshurafa](https://github.com/alanshurafa)**
+
 <!-- markdownlint-disable MD013 -->
 
 > Pull emails from Gmail into an Open Brain pack with local sensitivity routing, engagement filtering, contact-based relationship tiers, and LLM atomization of long messages.
