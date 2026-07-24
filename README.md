@@ -23,32 +23,12 @@ Never built an Open Brain? Start here:
 
 ## Recent Contributions
 
-The 20 most recent merged PRs. This list is generated from GitHub and refreshes daily. Last updated: 2026-05-22.
+The 20 most recent merged PRs. This list is generated from GitHub and refreshes daily. Last updated: 2026-07-24.
 
 <!-- recent-contributions:start -->
 
 | Contribution | What changed | Creator |
 | ------------ | ------------ | ------- |
-| [Provenance chains — derivation tracking](recipes/provenance-chains/) | Provenance chains — derivation tracking. | [@alanshurafa](https://github.com/alanshurafa) |
-| [Open Brain Dashboard Pro — Next.js 16 + iron-session](dashboards/open-brain-dashboard-pro/) | Open Brain Dashboard Pro — Next.js 16 + iron-session. | [@alanshurafa](https://github.com/alanshurafa) |
-| [Atomizer — generic + Gmail re-atomization toolkit](recipes/atomizer/) | Atomizer — generic + Gmail re-atomization toolkit. | [@alanshurafa](https://github.com/alanshurafa) |
-| [Brain smoke test — install verification harness](recipes/brain-smoke-test/) | Brain smoke test — install verification harness. | [@alanshurafa](https://github.com/alanshurafa) |
-| [CRM improvements: crm_ prefix, FTS search, meeting prep, stale detection](extensions/professional-crm/) | CRM improvements: crm_ prefix, FTS search, meeting prep, stale detection. | [@pintomatic](https://github.com/pintomatic) |
-| [Edge function cost optimization — 73% invocation reduction](recipes/edge-function-cost-optimization/) | Edge function cost optimization — 73% invocation reduction. | [@JustinTSmith](https://github.com/JustinTSmith) |
-| [Obsidian-vault-import: --source-label to override metadata.source](recipes/obsidian-vault-import/) | Obsidian-vault-import: --source-label to override metadata.source. | [@dhanjit](https://github.com/dhanjit) |
-| [Preserve full frontmatter in obsidian-vault-import metadata](recipes/obsidian-vault-import/) | Preserves full frontmatter in obsidian-vault-import metadata. | [@dhanjit](https://github.com/dhanjit) |
-| [Load .env into wiki-compiler child processes](recipes/wiki-compiler/) | Loads .env into wiki-compiler child processes. | [@mlava](https://github.com/mlava) |
-| [Enable standalone output for Docker builds](dashboards/open-brain-dashboard-next/) | Enables standalone output for Docker builds. | [@Mavrick-F](https://github.com/Mavrick-F) |
-| [Fix outdated primitives section in README](README.md) | Fixes outdated primitives section in README. | [@jjshanks](https://github.com/jjshanks) |
-| [Document Edge Function redeploy step in OpenRouter rotation FAQ](docs/03-faq.md) | Documents Edge Function redeploy step in OpenRouter rotation FAQ. | [@Silverhawk-bit](https://github.com/Silverhawk-bit) |
-| [Return JSON-RPC error envelopes on auth failure](server/index.ts) | Returns JSON-RPC error envelopes on auth failure. | [@txcfi-scott](https://github.com/txcfi-scott) |
-| [Markdownlint sweep for existing recipe/schema docs](schemas/workflow-status/) | Markdownlint sweep for existing recipe/schema docs. | [@alanshurafa](https://github.com/alanshurafa) |
-| [Improve ChatGPT MCP compatibility](primitives/remote-mcp/) | Improves ChatGPT MCP compatibility. | [@justfinethanku](https://github.com/justfinethanku) |
-| [Add wiki compiler orchestration recipe](recipes/wiki-compiler/) | Adds wiki compiler orchestration recipe. | [@justfinethanku](https://github.com/justfinethanku) |
-| [Wiki synthesis + autobiography pipeline](recipes/wiki-synthesis/) | Wiki synthesis + autobiography pipeline. | [@alanshurafa](https://github.com/alanshurafa) |
-| [Entity wiki pages from knowledge graph](recipes/entity-wiki/) | Entity wiki pages from knowledge graph. | [@alanshurafa](https://github.com/alanshurafa) |
-| [Typed reasoning edges + Opus/Haiku classifier](schemas/typed-reasoning-edges/) | Typed reasoning edges + Opus/Haiku classifier. | [@alanshurafa](https://github.com/alanshurafa) |
-| [Entity extraction worker](integrations/entity-extraction-worker/) | Entity extraction worker. | [@alanshurafa](https://github.com/alanshurafa) |
 
 <!-- recent-contributions:end -->
 
